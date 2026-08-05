@@ -68,6 +68,7 @@ FR.register((function () {
       });
     },
     destroy: function () {
+      closeAll();                       // releases the Lenis scroll lock
       if (onClick) document.removeEventListener('click', onClick);
       if (onKey)   document.removeEventListener('keydown', onKey);
       observers.forEach(function (o) { o.disconnect(); });
@@ -162,6 +163,7 @@ FR.register((function () {
       document.addEventListener('keydown', onKey);
     },
     destroy: function () {
+      closeAll();
       unbindHover();
       if (mq && onMQ) mq.removeEventListener('change', onMQ);
       if (onClick) document.removeEventListener('click', onClick);
@@ -667,6 +669,12 @@ FR.register({
     if (animating) return;
     animating = true;
 
+    // a modal may be open (e.g. the contact modal); close it and make sure
+    // scrolling is restored, or the next page arrives unscrollable
+    document.querySelectorAll('[data-modal].is-open, [data-hover-target].is-open')
+      .forEach(function (el) { el.classList.remove('is-open'); });
+    if (window.lenis) lenis.start();
+
     var overlay = document.querySelector(SEL.overlay);
     var oldWrapper = document.querySelector(SEL.wrapper);
     if (oldWrapper) oldWrapper.style.zIndex = '40';
@@ -709,8 +717,12 @@ FR.register({
           swapHead(doc);
           reinitWebflow(doc);
 
-          if (window.lenis) lenis.scrollTo(0, { immediate: true });
-          else window.scrollTo(0, 0);
+          if (window.lenis) {
+            lenis.start();
+            lenis.scrollTo(0, { immediate: true });
+          } else {
+            window.scrollTo(0, 0);
+          }
 
           initAll();
           animating = false;
