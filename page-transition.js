@@ -749,9 +749,13 @@ FR.register({
               oldWrapper.style.top = (-fromScroll) + 'px';
               oldWrapper.style.left = '0';
               oldWrapper.style.width = '100%';
-              oldWrapper.style.zIndex = '40';
+              oldWrapper.style.zIndex = '0';
               stash = { wrapper: oldWrapper, url: fromUrl, scrollY: fromScroll,
                         wfPage: fromWfPage, title: fromTitle };
+              // the active page must out-stack the fixed stale one, or it
+              // gets covered by it and the page becomes unscrollable
+              incoming.style.position = 'relative';
+              incoming.style.zIndex = '1';
             } else {
               dropStash();
               oldWrapper.remove();
