@@ -1,7 +1,5 @@
 window.FR = { modules: [], register: function (m) { this.modules.push(m); } };
 
-gsap.registerPlugin(ScrollTrigger);
-
 window.lenis = new Lenis({
   duration: 2.2,
   easing: function (t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); },
@@ -28,17 +26,28 @@ FR.register((function () {
   function getModal(name) { return document.querySelector('[data-modal="' + name + '"]'); }
   function isOpen(m) { return m.classList.contains('is-open'); }
 
-  function anyOpen() { return !!document.querySelector('[data-modal].is-open'); }
+  // A modal that CSS keeps hidden at this breakpoint (e.g. the About one,
+  // which is hover-driven on desktop) must not lock scrolling.
+  function rendered(m) {
+    return !!(m.offsetWidth || m.offsetHeight || m.getClientRects().length);
+  }
+
+  function anyRenderedOpen() {
+    var list = document.querySelectorAll('[data-modal].is-open');
+    for (var i = 0; i < list.length; i++) {
+      if (rendered(list[i])) return true;
+    }
+    return false;
+  }
 
   function open(m) {
     m.classList.add('is-open');
-    if (window.lenis) lenis.stop();
+    if (window.lenis && rendered(m)) lenis.stop();
   }
 
   function close(m) {
     m.classList.remove('is-open');
-    // only resume scrolling if nothing else is still open
-    if (window.lenis && !anyOpen()) lenis.start();
+    if (window.lenis && !anyRenderedOpen()) lenis.start();
   }
 
   return {
@@ -400,63 +409,6 @@ FR.register((function () {
 
 
 /* ============================================================
-   5. WORK HOVER  (GSAP flex-grow)
-   ============================================================ */
-FR.register((function () {
-  var mq = window.matchMedia('(min-width: 768px)');
-  var handlers = [], items = [], onMQ;
-
-  function bind() {
-    if (handlers.length || !items.length) return;
-    var origins = ['left top', 'left top', 'center top', 'right top', 'right top'];
-    items.forEach(function (item, i) {
-      gsap.set(item, { transformOrigin: origins[i] || 'center top' });
-      var enter = function () {
-        gsap.to(item, { flexGrow: 1.2, duration: 0.6, ease: 'power3.inOut' });
-        gsap.to(items.filter(function (el) { return el !== item; }),
-          { flexGrow: 1, opacity: 0.4, duration: 0.5, ease: 'power2.inOut' });
-      };
-      var leave = function () {
-        gsap.to(items, { flexGrow: 1, opacity: 1, duration: 0.5, ease: 'power3.inOut' });
-      };
-      item.addEventListener('mouseenter', enter);
-      item.addEventListener('mouseleave', leave);
-      handlers.push({ item: item, enter: enter, leave: leave });
-    });
-  }
-
-  function unbind() {
-    handlers.forEach(function (h) {
-      h.item.removeEventListener('mouseenter', h.enter);
-      h.item.removeEventListener('mouseleave', h.leave);
-    });
-    handlers.length = 0;
-    if (items.length) gsap.set(items, { flexGrow: 1, opacity: 1, clearProps: 'transform' });
-  }
-
-  return {
-    name: 'workHover',
-    init: function () {
-      // Work's slides only: not inside a modal
-      items = gsap.utils.toArray('.swiper-slide').filter(function (el) {
-        return !el.closest('[data-modal]');
-      });
-      if (!items.length) return;
-      onMQ = function (e) { e.matches ? bind() : unbind(); };
-      onMQ(mq);
-      mq.addEventListener('change', onMQ);
-    },
-    destroy: function () {
-      unbind();
-      if (onMQ) mq.removeEventListener('change', onMQ);
-      onMQ = null;
-      items = [];
-    }
-  };
-})());
-
-
-/* ============================================================
    6. WORK SLIDER  (mobile only)
    ============================================================ */
 FR.register((function () {
@@ -572,7 +524,7 @@ FR.register({
    ============================================================ */
 (function () {
   var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
-  var EASE = 'sine.out';
+  var EASE = 'cubic-bezier(.39,.575,.565,1)';
 
   var SEL = {
     wrapper: '.page-wrapper',
@@ -670,42 +622,67 @@ FR.register({
         var navs = [incoming.querySelector(SEL.navDesk),
                     incoming.querySelector(SEL.navMob)].filter(Boolean);
 
-        gsap.set(main, { y: '100vh' });
-        if (!holdNav && navs.length) gsap.set(navs, { yPercent: -100 });
+        var anims = [];
 
-        var tl = gsap.timeline({
-          onComplete: function () {
-            destroyAll();
+        function settle() {
+          destroyAll();
 
-            incoming.style.position = incoming.style.inset =
-              incoming.style.zIndex = incoming.style.width = '';
-            gsap.set([main].concat(navs), { clearProps: 'transform' });
-            if (oldWrapper && oldWrapper.parentNode) oldWrapper.remove();
+          anims.forEach(function (a) { try { a.cancel(); } catch (e) {} });
+          main.style.transform = '';
+          navs.forEach(function (n) { n.style.transform = ''; });
 
-            if (push) history.pushState({ url: url }, '', url);
-            swapHead(doc);
-            reinitWebflow(doc);
+          incoming.style.position = incoming.style.inset =
+            incoming.style.zIndex = incoming.style.width = '';
+          if (oldWrapper && oldWrapper.parentNode) oldWrapper.remove();
 
-            if (window.lenis) lenis.scrollTo(0, { immediate: true });
-            else window.scrollTo(0, 0);
+          if (push) history.pushState({ url: url }, '', url);
+          swapHead(doc);
+          reinitWebflow(doc);
 
-            initAll();
-            ScrollTrigger.refresh();
-            animating = false;
-          }
-        });
+          if (window.lenis) lenis.scrollTo(0, { immediate: true });
+          else window.scrollTo(0, 0);
 
+          initAll();
+          animating = false;
+        }
+
+        // starting positions, set before animating to avoid a flash
+        main.style.transform = 'translateY(100vh)';
+        if (!holdNav) navs.forEach(function (n) { n.style.transform = 'translateY(-100%)'; });
+
+        // page slides up
+        anims.push(main.animate(
+          [{ transform: 'translateY(100vh)' }, { transform: 'translateY(0)' }],
+          { duration: SLIDE_MS, easing: EASE, fill: 'forwards' }
+        ));
+
+        // nav slides down, unless this link holds it
+        if (!holdNav) {
+          navs.forEach(function (n) {
+            anims.push(n.animate(
+              [{ transform: 'translateY(-100%)' }, { transform: 'translateY(0)' }],
+              { duration: NAV_MS, delay: NAV_DELAY, easing: EASE, fill: 'forwards' }
+            ));
+          });
+        }
+
+        // overlay fades in over the first half, out over the second
         if (overlay) {
-          gsap.set(overlay, { visibility: 'visible', pointerEvents: 'none' });
-          tl.fromTo(overlay, { opacity: 0 },
-              { opacity: 1, duration: OVERLAY_MS / 1000, ease: EASE }, 0)
-            .to(overlay, { opacity: 0, duration: OVERLAY_MS / 1000, ease: EASE },
-              SLIDE_MS / 1000 - OVERLAY_MS / 1000);
+          overlay.style.visibility = 'visible';
+          overlay.style.pointerEvents = 'none';
+          anims.push(overlay.animate(
+            [
+              { opacity: 0, offset: 0,   easing: EASE },
+              { opacity: 1, offset: OVERLAY_MS / SLIDE_MS, easing: EASE },
+              { opacity: 0, offset: 1 }
+            ],
+            { duration: SLIDE_MS, fill: 'forwards' }
+          ));
         }
-        tl.to(main, { y: 0, duration: SLIDE_MS / 1000, ease: EASE }, 0);
-        if (!holdNav && navs.length) {
-          tl.to(navs, { yPercent: 0, duration: NAV_MS / 1000, ease: EASE }, NAV_DELAY / 1000);
-        }
+
+        Promise.all(anims.map(function (a) { return a.finished; }))
+          .then(settle)
+          .catch(settle);
       })
       .catch(function () { location.href = url; });
   }
@@ -724,5 +701,4 @@ FR.register({
 
   // first load
   initAll();
-  ScrollTrigger.refresh();
 })();
