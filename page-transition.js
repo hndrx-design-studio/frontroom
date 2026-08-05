@@ -611,7 +611,7 @@ FR.register({
    ============================================================ */
 (function () {
   var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
-  var BACK_NAV_MS = 100;   // nav on the way back: near-instant
+  var BACK_NAV_MS = 10;   // nav on the way back: near-instant
   var EASE = 'cubic-bezier(.39,.575,.565,1)';
 
   var SEL = {
