@@ -1,13 +1,3 @@
-/* ============================================================
-   FRONT ROOM - TRANSITION ROUTER
-
-   Load this file AFTER gsap, ScrollTrigger, Swiper and Lenis.
-   See the setup notes in chat for the exact Webflow footer order.
-   ============================================================ */
-
-/* ============================================================
-   0. NAMESPACE + LENIS (persistent, never destroyed)
-   ============================================================ */
 window.FR = { modules: [], register: function (m) { this.modules.push(m); } };
 
 gsap.registerPlugin(ScrollTrigger);
@@ -92,7 +82,7 @@ FR.register((function () {
 
 
 /* ============================================================
-   2. ARCHIVE FILTER  (was duplicated twice — now single)
+   2. ARCHIVE FILTER  (was duplicated twice ? now single)
    ============================================================ */
 FR.register((function () {
   var SINGLE = 'fragments';
