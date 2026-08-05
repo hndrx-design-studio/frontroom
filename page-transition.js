@@ -1,43 +1,38 @@
 window.FR = { modules: [], register: function (m) { this.modules.push(m); } };
 
 /* ============================================================
-   1. MODAL  (merged: Archive's lenis control + Work's autoclose)
+   1. MODAL   (Archive, Work)
+   Openers: data-modal-open="Name"
+   Modals:  data-modal="Name"
+   Closers: data-modal-close        closes ALL, value ignored
+   Lock:    data-modal-lock="never" on the modal to skip scroll lock
    ============================================================ */
 FR.register((function () {
   var onClick, onKey, observers = [];
 
-  function getModal(name) { return document.querySelector('[data-modal="' + name + '"]'); }
+  function modalFor(name) { return document.querySelector('[data-modal="' + name + '"]'); }
   function isOpen(m) { return m.classList.contains('is-open'); }
 
-  var MOBILE = '(max-width: 767px)';
-
-  // Whether opening this modal should lock page scroll.
-  //   data-modal-lock="mobile"  -> only below 768px (About: hover on
-  //                                desktop/tablet, real modal on mobile)
-  //   data-modal-lock="never"   -> never lock
-  //   attribute absent          -> always lock (Archive, Work)
   function shouldLock(m) {
-    var mode = (m.getAttribute('data-modal-lock') || '').toLowerCase();
-    if (mode === 'never')  return false;
-    if (mode === 'mobile') return window.matchMedia(MOBILE).matches;
-    return true;
+    return (m.getAttribute('data-modal-lock') || '').toLowerCase() !== 'never';
   }
 
   function anyLockingOpen() {
     var list = document.querySelectorAll('[data-modal].is-open');
-    for (var i = 0; i < list.length; i++) {
-      if (shouldLock(list[i])) return true;
-    }
+    for (var i = 0; i < list.length; i++) if (shouldLock(list[i])) return true;
     return false;
   }
 
   function open(m) {
+    if (!m) return;
     m.classList.add('is-open');
     if (window.lenis && shouldLock(m)) lenis.stop();
   }
 
-  function close(m) {
-    m.classList.remove('is-open');
+  function closeAll() {
+    document.querySelectorAll('[data-modal].is-open').forEach(function (m) {
+      m.classList.remove('is-open');
+    });
     if (window.lenis && !anyLockingOpen()) lenis.start();
   }
 
@@ -48,32 +43,23 @@ FR.register((function () {
       if (!modals.length) return;
 
       onClick = function (e) {
+        if (e.target.closest('[data-modal-close]')) { closeAll(); return; }
         var opener = e.target.closest('[data-modal-open]');
-        if (opener) {
-          var m = getModal(opener.getAttribute('data-modal-open'));
-          if (m) open(m);
-          return;
-        }
-        var closer = e.target.closest('[data-modal-close]');
-        if (closer) {
-          var mc = getModal(closer.getAttribute('data-modal-close'));
-          if (mc) close(mc);
-        }
-      };
-      onKey = function (e) {
-        if (e.key !== 'Escape') return;
-        document.querySelectorAll('[data-modal].is-open').forEach(close);
+        if (!opener) return;
+        closeAll();
+        open(modalFor(opener.getAttribute('data-modal-open')));
       };
       document.addEventListener('click', onClick);
+
+      onKey = function (e) { if (e.key === 'Escape') closeAll(); };
       document.addEventListener('keydown', onKey);
 
-      // opt-in autoclose after successful form submit
       modals.forEach(function (m) {
         if (!m.hasAttribute('data-modal-autoclose')) return;
         m.querySelectorAll('.w-form-done').forEach(function (done) {
           var ob = new MutationObserver(function () {
             if (getComputedStyle(done).display !== 'none' && isOpen(m)) {
-              setTimeout(function () { close(m); }, 2000);
+              setTimeout(closeAll, 2000);
             }
           });
           ob.observe(done, { attributes: true, attributeFilter: ['style'] });
@@ -91,6 +77,99 @@ FR.register((function () {
   };
 })());
 
+
+/* ============================================================
+   1b. HOVER SWAP   (About page services)
+   Openers: data-hover-open="Name"
+   Targets: data-hover-target="Name"
+
+   >=768px  hover to show, leave to hide, no scroll lock
+   <768px   tap to show, tap again or a closer to hide, locks scroll
+   Closers: data-hover-close        closes ALL, value ignored
+   Toggled class: is-open
+   ============================================================ */
+FR.register((function () {
+  var DESKTOP = '(min-width: 768px)';
+  var mq, onMQ, onClick, onKey, bound = [];
+
+  function targetFor(name) { return document.querySelector('[data-hover-target="' + name + '"]'); }
+  function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
+
+  function closeAll() {
+    document.querySelectorAll('[data-hover-target].is-open').forEach(function (el) {
+      el.classList.remove('is-open');
+    });
+    // scroll only ever locked on mobile, so release it here
+    if (window.lenis && !isDesktop()) lenis.start();
+  }
+
+  function show(el, lock) {
+    if (!el) return;
+    el.classList.add('is-open');
+    if (lock && window.lenis) lenis.stop();
+  }
+
+  function bindHover() {
+    if (bound.length) return;
+    document.querySelectorAll('[data-hover-open]').forEach(function (opener) {
+      var enter = function () {
+        if (!isDesktop()) return;
+        closeAll();
+        show(targetFor(opener.getAttribute('data-hover-open')), false);
+      };
+      var leave = function () { if (isDesktop()) closeAll(); };
+      opener.addEventListener('mouseenter', enter);
+      opener.addEventListener('mouseleave', leave);
+      bound.push({ el: opener, enter: enter, leave: leave });
+    });
+  }
+
+  function unbindHover() {
+    bound.forEach(function (b) {
+      b.el.removeEventListener('mouseenter', b.enter);
+      b.el.removeEventListener('mouseleave', b.leave);
+    });
+    bound = [];
+  }
+
+  return {
+    name: 'hoverSwap',
+    init: function () {
+      if (!document.querySelector('[data-hover-open]')) return;
+      mq = window.matchMedia(DESKTOP);
+
+      if (isDesktop()) bindHover();
+      onMQ = function (e) {
+        closeAll();
+        e.matches ? bindHover() : unbindHover();
+      };
+      mq.addEventListener('change', onMQ);
+
+      // mobile: tap to toggle
+      onClick = function (e) {
+        if (e.target.closest('[data-hover-close]')) { closeAll(); return; }
+        if (isDesktop()) return;
+        var opener = e.target.closest('[data-hover-open]');
+        if (!opener) return;
+        var el = targetFor(opener.getAttribute('data-hover-open'));
+        if (el && el.classList.contains('is-open')) { closeAll(); return; }
+        closeAll();
+        show(el, true);
+      };
+      document.addEventListener('click', onClick);
+
+      onKey = function (e) { if (e.key === 'Escape') closeAll(); };
+      document.addEventListener('keydown', onKey);
+    },
+    destroy: function () {
+      unbindHover();
+      if (mq && onMQ) mq.removeEventListener('change', onMQ);
+      if (onClick) document.removeEventListener('click', onClick);
+      if (onKey)   document.removeEventListener('keydown', onKey);
+      mq = null; onMQ = onClick = onKey = null;
+    }
+  };
+})());
 
 /* ============================================================
    2. ARCHIVE FILTER  (was duplicated twice ? now single)
