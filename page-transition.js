@@ -27,8 +27,19 @@ FR.register((function () {
 
   function getModal(name) { return document.querySelector('[data-modal="' + name + '"]'); }
   function isOpen(m) { return m.classList.contains('is-open'); }
-  function open(m)  { m.classList.add('is-open');    if (window.lenis) lenis.stop(); }
-  function close(m) { m.classList.remove('is-open'); if (window.lenis) lenis.start(); }
+
+  function anyOpen() { return !!document.querySelector('[data-modal].is-open'); }
+
+  function open(m) {
+    m.classList.add('is-open');
+    if (window.lenis) lenis.stop();
+  }
+
+  function close(m) {
+    m.classList.remove('is-open');
+    // only resume scrolling if nothing else is still open
+    if (window.lenis && !anyOpen()) lenis.start();
+  }
 
   return {
     name: 'modal',
@@ -600,6 +611,36 @@ FR.register({
     if (c1 && c2) c2.setAttribute('href', c1.getAttribute('href'));
   }
 
+  // Rebind Webflow IX2 to the new DOM. The data-wf-page attribute tells IX2
+  // which page's interaction definitions to load, so it MUST be copied from
+  // the incoming document before init or IX2 binds the wrong page's data.
+  function reinitWebflow(doc) {
+    try {
+      var incomingHtml = doc.documentElement;
+      var page = incomingHtml && incomingHtml.getAttribute('data-wf-page');
+      if (page) document.documentElement.setAttribute('data-wf-page', page);
+
+      if (!window.Webflow) return;
+      window.Webflow.destroy();
+      window.Webflow.ready();
+      var ix2 = window.Webflow.require && window.Webflow.require('ix2');
+      if (ix2 && ix2.init) ix2.init();
+      document.dispatchEvent(new Event('readystatechange'));
+
+      // reset the active nav link
+      document.querySelectorAll('.w--current').forEach(function (el) {
+        el.classList.remove('w--current');
+      });
+      document.querySelectorAll('a[href]').forEach(function (a) {
+        try {
+          if (new URL(a.href, location.href).pathname === location.pathname) {
+            a.classList.add('w--current');
+          }
+        } catch (e) {}
+      });
+    } catch (e) { console.warn('[FR] webflow reinit', e); }
+  }
+
   function go(url, holdNav, push) {
     if (animating) return;
     animating = true;
@@ -643,6 +684,7 @@ FR.register({
 
             if (push) history.pushState({ url: url }, '', url);
             swapHead(doc);
+            reinitWebflow(doc);
 
             if (window.lenis) lenis.scrollTo(0, { immediate: true });
             else window.scrollTo(0, 0);
