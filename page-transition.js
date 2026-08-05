@@ -611,6 +611,7 @@ FR.register({
    ============================================================ */
 (function () {
   var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
+  var BACK_NAV_MS = 10;   // nav on the way back: near-instant
   var EASE = 'cubic-bezier(.39,.575,.565,1)';
 
   var SEL = {
@@ -827,6 +828,9 @@ FR.register({
     current.style.zIndex = '60';
     current.style.width = '100%';
 
+    var main = current.querySelector(SEL.main);
+    var navs = [current.querySelector(SEL.navDesk),
+                current.querySelector(SEL.navMob)].filter(Boolean);
     var anims = [];
 
     function done() {
@@ -853,12 +857,19 @@ FR.register({
       animating = false;
     }
 
-    // Slide the whole page away as one block, nav included. Animating the
-    // nav separately would tear the page apart and flash the nav underneath.
-    anims.push(current.animate(
-      [{ transform: 'translateY(0)' }, { transform: 'translateY(100vh)' }],
-      { duration: SLIDE_MS, easing: EASE, fill: 'forwards' }
-    ));
+    if (main) {
+      anims.push(main.animate(
+        [{ transform: 'translateY(0)' }, { transform: 'translateY(100vh)' }],
+        { duration: SLIDE_MS, easing: EASE, fill: 'forwards' }
+      ));
+    }
+    // nav clears almost instantly so it never lingers over the page below
+    navs.forEach(function (n) {
+      anims.push(n.animate(
+        [{ transform: 'translateY(0)' }, { transform: 'translateY(-100%)' }],
+        { duration: BACK_NAV_MS, easing: 'linear', fill: 'forwards' }
+      ));
+    });
     if (overlay) {
       overlay.style.visibility = 'visible';
       overlay.style.pointerEvents = 'none';
