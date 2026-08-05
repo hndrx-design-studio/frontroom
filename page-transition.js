@@ -593,6 +593,13 @@ FR.register({
 
 /* ============================================================
    9. THE ROUTER
+
+   Standard link      -> old page is discarded
+   data-page-modal    -> old page is STASHED (detached, not queryable)
+                         so returning to it is instant, no refetch,
+                         scroll position preserved
+   data-page-back     -> explicit "close" control on the stashed-over page
+   Browser back also restores the stash when the URL matches.
    ============================================================ */
 (function () {
   var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
@@ -607,6 +614,7 @@ FR.register({
   };
 
   var animating = false;
+  var stash = null;   // { wrapper, url, scrollY, wfPage, title }
 
   function initAll()    { FR.modules.forEach(function (m) { try { m.init(); }    catch (e) { console.warn('[FR] init ' + m.name, e); } }); }
   function destroyAll() { FR.modules.forEach(function (m) { try { m.destroy(); } catch (e) { console.warn('[FR] destroy ' + m.name, e); } }); }
@@ -623,6 +631,17 @@ FR.register({
     return true;
   }
 
+  function closeOpen() {
+    document.querySelectorAll('[data-modal].is-open, [data-hover-target].is-open')
+      .forEach(function (el) { el.classList.remove('is-open'); });
+    if (window.lenis) lenis.start();
+  }
+
+  function scrollTop() {
+    if (window.lenis) { lenis.start(); lenis.scrollTo(0, { immediate: true }); }
+    else window.scrollTo(0, 0);
+  }
+
   function swapHead(doc) {
     var t = doc.querySelector('title');
     if (t) document.title = t.textContent;
@@ -635,15 +654,11 @@ FR.register({
     if (c1 && c2) c2.setAttribute('href', c1.getAttribute('href'));
   }
 
-  // Rebind Webflow IX2 to the new DOM. The data-wf-page attribute tells IX2
-  // which page's interaction definitions to load, so it MUST be copied from
-  // the incoming document before init or IX2 binds the wrong page's data.
-  function reinitWebflow(doc) {
+  // IX2 needs data-wf-page to match the page it is binding, otherwise it
+  // initialises against the previous page's interaction data.
+  function reinitWebflow(wfPage) {
     try {
-      var incomingHtml = doc.documentElement;
-      var page = incomingHtml && incomingHtml.getAttribute('data-wf-page');
-      if (page) document.documentElement.setAttribute('data-wf-page', page);
-
+      if (wfPage) document.documentElement.setAttribute('data-wf-page', wfPage);
       if (!window.Webflow) return;
       window.Webflow.destroy();
       window.Webflow.ready();
@@ -651,29 +666,30 @@ FR.register({
       if (ix2 && ix2.init) ix2.init();
       document.dispatchEvent(new Event('readystatechange'));
 
-      // reset the active nav link
-      document.querySelectorAll('.w--current').forEach(function (el) {
-        el.classList.remove('w--current');
-      });
+      document.querySelectorAll('.w--current').forEach(function (el) { el.classList.remove('w--current'); });
       document.querySelectorAll('a[href]').forEach(function (a) {
         try {
-          if (new URL(a.href, location.href).pathname === location.pathname) {
-            a.classList.add('w--current');
-          }
+          if (new URL(a.href, location.href).pathname === location.pathname) a.classList.add('w--current');
         } catch (e) {}
       });
     } catch (e) { console.warn('[FR] webflow reinit', e); }
   }
 
-  function go(url, holdNav, push) {
+  function dropStash() {
+    stash = null;
+  }
+
+  // ---------- forward navigation ----------
+  function go(url, holdNav, push, asPage) {
     if (animating) return;
     animating = true;
 
-    // a modal may be open (e.g. the contact modal); close it and make sure
-    // scrolling is restored, or the next page arrives unscrollable
-    document.querySelectorAll('[data-modal].is-open, [data-hover-target].is-open')
-      .forEach(function (el) { el.classList.remove('is-open'); });
-    if (window.lenis) lenis.start();
+    var fromUrl = location.href;
+    var fromScroll = window.scrollY || document.documentElement.scrollTop || 0;
+    var fromWfPage = document.documentElement.getAttribute('data-wf-page');
+    var fromTitle = document.title;
+
+    closeOpen();
 
     var overlay = document.querySelector(SEL.overlay);
     var oldWrapper = document.querySelector(SEL.wrapper);
@@ -687,7 +703,6 @@ FR.register({
         if (!incoming) { location.href = url; return; }
 
         incoming.querySelectorAll(SEL.overlay).forEach(function (o) { o.remove(); });
-        // page-level scripts are dead weight now; the router owns all init
         incoming.querySelectorAll('script').forEach(function (s) { s.remove(); });
 
         incoming.style.position = 'fixed';
@@ -704,41 +719,41 @@ FR.register({
 
         function settle() {
           destroyAll();
-
           anims.forEach(function (a) { try { a.cancel(); } catch (e) {} });
           main.style.transform = '';
           navs.forEach(function (n) { n.style.transform = ''; });
 
           incoming.style.position = incoming.style.inset =
             incoming.style.zIndex = incoming.style.width = '';
-          if (oldWrapper && oldWrapper.parentNode) oldWrapper.remove();
 
-          if (push) history.pushState({ url: url }, '', url);
-          swapHead(doc);
-          reinitWebflow(doc);
-
-          if (window.lenis) {
-            lenis.start();
-            lenis.scrollTo(0, { immediate: true });
-          } else {
-            window.scrollTo(0, 0);
+          if (oldWrapper && oldWrapper.parentNode) {
+            oldWrapper.style.zIndex = '';
+            if (asPage) {
+              // detach and keep: not in the DOM, so module queries never see it
+              oldWrapper.parentNode.removeChild(oldWrapper);
+              stash = { wrapper: oldWrapper, url: fromUrl, scrollY: fromScroll,
+                        wfPage: fromWfPage, title: fromTitle };
+            } else {
+              oldWrapper.remove();
+              dropStash();
+            }
           }
 
+          if (push) history.pushState({ url: url, stashed: !!asPage }, '', url);
+          swapHead(doc);
+          reinitWebflow(doc.documentElement && doc.documentElement.getAttribute('data-wf-page'));
+          scrollTop();
           initAll();
           animating = false;
         }
 
-        // starting positions, set before animating to avoid a flash
         main.style.transform = 'translateY(100vh)';
         if (!holdNav) navs.forEach(function (n) { n.style.transform = 'translateY(-100%)'; });
 
-        // page slides up
         anims.push(main.animate(
           [{ transform: 'translateY(100vh)' }, { transform: 'translateY(0)' }],
           { duration: SLIDE_MS, easing: EASE, fill: 'forwards' }
         ));
-
-        // nav slides down, unless this link holds it
         if (!holdNav) {
           navs.forEach(function (n) {
             anims.push(n.animate(
@@ -747,39 +762,124 @@ FR.register({
             ));
           });
         }
-
-        // overlay fades in over the first half, out over the second
         if (overlay) {
           overlay.style.visibility = 'visible';
           overlay.style.pointerEvents = 'none';
           anims.push(overlay.animate(
-            [
-              { opacity: 0, offset: 0,   easing: EASE },
-              { opacity: 1, offset: OVERLAY_MS / SLIDE_MS, easing: EASE },
-              { opacity: 0, offset: 1 }
-            ],
+            [{ opacity: 0, offset: 0, easing: EASE },
+             { opacity: 1, offset: OVERLAY_MS / SLIDE_MS, easing: EASE },
+             { opacity: 0, offset: 1 }],
             { duration: SLIDE_MS, fill: 'forwards' }
           ));
         }
 
-        Promise.all(anims.map(function (a) { return a.finished; }))
-          .then(settle)
-          .catch(settle);
+        Promise.all(anims.map(function (a) { return a.finished; })).then(settle).catch(settle);
       })
       .catch(function () { location.href = url; });
   }
 
+  // ---------- return to the stashed page ----------
+  function restore(push) {
+    if (animating || !stash) return;
+    animating = true;
+
+    var saved = stash;
+    stash = null;
+
+    closeOpen();
+
+    var overlay = document.querySelector(SEL.overlay);
+    var current = document.querySelector(SEL.wrapper);
+    if (!current) { animating = false; location.href = saved.url; return; }
+
+    // put the stashed page back underneath, immediately
+    saved.wrapper.style.zIndex = '40';
+    document.body.insertBefore(saved.wrapper, current);
+
+    current.style.position = 'fixed';
+    current.style.inset = '0';
+    current.style.zIndex = '60';
+    current.style.width = '100%';
+
+    var main = current.querySelector(SEL.main);
+    var navs = [current.querySelector(SEL.navDesk),
+                current.querySelector(SEL.navMob)].filter(Boolean);
+    var anims = [];
+
+    function done() {
+      destroyAll();
+      anims.forEach(function (a) { try { a.cancel(); } catch (e) {} });
+      current.remove();
+
+      saved.wrapper.style.zIndex = '';
+      document.title = saved.title;
+      if (push) history.pushState({ url: saved.url }, '', saved.url);
+      reinitWebflow(saved.wfPage);
+
+      if (window.lenis) { lenis.start(); lenis.scrollTo(saved.scrollY, { immediate: true }); }
+      else window.scrollTo(0, saved.scrollY);
+
+      initAll();
+      animating = false;
+    }
+
+    if (main) {
+      anims.push(main.animate(
+        [{ transform: 'translateY(0)' }, { transform: 'translateY(100vh)' }],
+        { duration: SLIDE_MS, easing: EASE, fill: 'forwards' }
+      ));
+    }
+    navs.forEach(function (n) {
+      anims.push(n.animate(
+        [{ transform: 'translateY(0)' }, { transform: 'translateY(-100%)' }],
+        { duration: NAV_MS, easing: EASE, fill: 'forwards' }
+      ));
+    });
+    if (overlay) {
+      overlay.style.visibility = 'visible';
+      overlay.style.pointerEvents = 'none';
+      anims.push(overlay.animate(
+        [{ opacity: 0, offset: 0, easing: EASE },
+         { opacity: 1, offset: 0.5, easing: EASE },
+         { opacity: 0, offset: 1 }],
+        { duration: SLIDE_MS, fill: 'forwards' }
+      ));
+    }
+
+    if (!anims.length) { done(); return; }
+    Promise.all(anims.map(function (a) { return a.finished; })).then(done).catch(done);
+  }
+
+  // ---------- clicks ----------
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+    // explicit close control on a stashed-over page
+    var back = e.target.closest('[data-page-back]');
+    if (back && stash) { e.preventDefault(); restore(true); return; }
+
     var a = e.target.closest('a');
     if (!isInternal(a)) return;
     e.preventDefault();
+
+    // returning to the stashed page by clicking a link to it
+    if (stash) {
+      try {
+        if (new URL(a.href, location.href).href === stash.url) { restore(true); return; }
+      } catch (err) {}
+    }
+
     var hold = a.getAttribute('data-vt') === 'hold' ||
                !!(a.closest(SEL.navDesk) || a.closest(SEL.navMob));
-    go(a.href, hold, true);
+    var asPage = a.hasAttribute('data-page-modal') || !!a.closest('[data-page-modal]');
+    go(a.href, hold, true, asPage);
   });
 
-  window.addEventListener('popstate', function () { go(location.href, false, false); });
+  // ---------- back / forward ----------
+  window.addEventListener('popstate', function () {
+    if (stash && location.href === stash.url) { restore(false); return; }
+    go(location.href, false, false, false);
+  });
 
   // first load
   initAll();
