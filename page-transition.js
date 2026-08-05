@@ -1,4 +1,12 @@
-window.FR = { modules: [], register: function (m) { this.modules.push(m); } };
+window.FR = {
+  modules: [],
+  register: function (m) { this.modules.push(m); },
+  // The active page. A stashed page sits behind marked [data-fr-stale];
+  // modules must never see it or they bind to two pages at once.
+  root: function () {
+    return document.querySelector('.page-wrapper:not([data-fr-stale])') || document;
+  }
+};
 
 /* ============================================================
    1. MODAL   (Archive, Work)
@@ -10,7 +18,7 @@ window.FR = { modules: [], register: function (m) { this.modules.push(m); } };
 FR.register((function () {
   var onClick, onKey, observers = [];
 
-  function modalFor(name) { return document.querySelector('[data-modal="' + name + '"]'); }
+  function modalFor(name) { return FR.root().querySelector('[data-modal="' + name + '"]'); }
   function isOpen(m) { return m.classList.contains('is-open'); }
 
   function shouldLock(m) {
@@ -18,7 +26,7 @@ FR.register((function () {
   }
 
   function anyLockingOpen() {
-    var list = document.querySelectorAll('[data-modal].is-open');
+    var list = FR.root().querySelectorAll('[data-modal].is-open');
     for (var i = 0; i < list.length; i++) if (shouldLock(list[i])) return true;
     return false;
   }
@@ -30,7 +38,7 @@ FR.register((function () {
   }
 
   function closeAll() {
-    document.querySelectorAll('[data-modal].is-open').forEach(function (m) {
+    FR.root().querySelectorAll('[data-modal].is-open').forEach(function (m) {
       m.classList.remove('is-open');
     });
     if (window.lenis && !anyLockingOpen()) lenis.start();
@@ -39,7 +47,7 @@ FR.register((function () {
   return {
     name: 'modal',
     init: function () {
-      var modals = document.querySelectorAll('[data-modal]');
+      var modals = FR.root().querySelectorAll('[data-modal]');
       if (!modals.length) return;
 
       onClick = function (e) {
@@ -93,11 +101,11 @@ FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
   var mq, onMQ, onClick, onKey, bound = [];
 
-  function targetFor(name) { return document.querySelector('[data-hover-target="' + name + '"]'); }
+  function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
 
   function closeAll() {
-    document.querySelectorAll('[data-hover-target].is-open').forEach(function (el) {
+    FR.root().querySelectorAll('[data-hover-target].is-open').forEach(function (el) {
       el.classList.remove('is-open');
     });
     // scroll only ever locked on mobile, so release it here
@@ -112,7 +120,7 @@ FR.register((function () {
 
   function bindHover() {
     if (bound.length) return;
-    document.querySelectorAll('[data-hover-open]').forEach(function (opener) {
+    FR.root().querySelectorAll('[data-hover-open]').forEach(function (opener) {
       var enter = function () {
         if (!isDesktop()) return;
         closeAll();
@@ -136,7 +144,7 @@ FR.register((function () {
   return {
     name: 'hoverSwap',
     init: function () {
-      if (!document.querySelector('[data-hover-open]')) return;
+      if (!FR.root().querySelector('[data-hover-open]')) return;
       mq = window.matchMedia(DESKTOP);
 
       if (isDesktop()) bindHover();
@@ -184,13 +192,13 @@ FR.register((function () {
   return {
     name: 'archiveFilter',
     init: function () {
-      if (!document.querySelector('[data-modal-open]')) return;
+      if (!FR.root().querySelector('[data-modal-open]')) return;
 
       onClick = function (e) {
         var card = e.target.closest && e.target.closest('[data-modal-open]');
         if (!card || card.closest('[data-modal]')) return;
 
-        var modal = document.querySelector('[data-modal="' + card.getAttribute('data-modal-open') + '"]');
+        var modal = FR.root().querySelector('[data-modal="' + card.getAttribute('data-modal-open') + '"]');
         if (!modal) return;
 
         var work = norm(card.getAttribute('data-work'));
@@ -229,7 +237,7 @@ FR.register((function () {
   }
 
   function collect() {
-    var found = document.querySelectorAll(ITEM);
+    var found = FR.root().querySelectorAll(ITEM);
     if (!found.length) return false;
     cells = [];
     Array.prototype.forEach.call(found, function (el) {
@@ -294,7 +302,7 @@ FR.register((function () {
     name: 'archiveLayout',
     init: function () {
       track = null; cells = []; current = null;
-      if (!document.querySelector(ITEM)) return;
+      if (!FR.root().querySelector(ITEM)) return;
       build();
 
       onResize = function () {
@@ -423,7 +431,7 @@ FR.register((function () {
     init: function () {
       entries = [];
       // only claim sliders that live inside a modal / slider wrap (Archive's)
-      document.querySelectorAll('.swiper').forEach(function (el) {
+      FR.root().querySelectorAll('.swiper').forEach(function (el) {
         var scope = scopeFor(el);
         if (!el.closest('[data-modal]') && !el.closest('[data-slider-wrap]')) return;
         var wrapper = el.querySelector('.swiper-wrapper');
@@ -505,7 +513,7 @@ FR.register((function () {
     name: 'workSlider',
     init: function () {
       container = null;
-      document.querySelectorAll('.swiper').forEach(function (el) {
+      FR.root().querySelectorAll('.swiper').forEach(function (el) {
         if (container) return;
         if (el.closest('[data-modal]') || el.closest('[data-slider-wrap]')) return;
         container = el;
@@ -579,7 +587,7 @@ FR.register({
 FR.register({
   name: 'finsweet',
   init: function () {
-    if (!document.querySelector('[fs-list-element], [fs-list-field], [fs-list-instance]')) return;
+    if (!FR.root().querySelector('[fs-list-element], [fs-list-field], [fs-list-instance]')) return;
     try {
       window.FinsweetAttributes = window.FinsweetAttributes || [];
       window.FinsweetAttributes.push(['list', function (instances) {
@@ -676,6 +684,9 @@ FR.register({
   }
 
   function dropStash() {
+    if (stash && stash.wrapper && stash.wrapper.parentNode) {
+      stash.wrapper.parentNode.removeChild(stash.wrapper);
+    }
     stash = null;
   }
 
@@ -729,13 +740,21 @@ FR.register({
           if (oldWrapper && oldWrapper.parentNode) {
             oldWrapper.style.zIndex = '';
             if (asPage) {
-              // detach and keep: not in the DOM, so module queries never see it
-              oldWrapper.parentNode.removeChild(oldWrapper);
+              // stays in the DOM as the visible background, but marked stale
+              // and inert so modules and the keyboard both ignore it
+              oldWrapper.setAttribute('data-fr-stale', '');
+              oldWrapper.setAttribute('aria-hidden', 'true');
+              oldWrapper.inert = true;
+              oldWrapper.style.position = 'fixed';
+              oldWrapper.style.top = (-fromScroll) + 'px';
+              oldWrapper.style.left = '0';
+              oldWrapper.style.width = '100%';
+              oldWrapper.style.zIndex = '40';
               stash = { wrapper: oldWrapper, url: fromUrl, scrollY: fromScroll,
                         wfPage: fromWfPage, title: fromTitle };
             } else {
-              oldWrapper.remove();
               dropStash();
+              oldWrapper.remove();
             }
           }
 
@@ -792,10 +811,7 @@ FR.register({
     var current = document.querySelector(SEL.wrapper);
     if (!current) { animating = false; location.href = saved.url; return; }
 
-    // put the stashed page back underneath, immediately
-    saved.wrapper.style.zIndex = '40';
-    document.body.insertBefore(saved.wrapper, current);
-
+    // the stashed page is already in the DOM behind us
     current.style.position = 'fixed';
     current.style.inset = '0';
     current.style.zIndex = '60';
@@ -811,6 +827,13 @@ FR.register({
       anims.forEach(function (a) { try { a.cancel(); } catch (e) {} });
       current.remove();
 
+      saved.wrapper.removeAttribute('data-fr-stale');
+      saved.wrapper.removeAttribute('aria-hidden');
+      saved.wrapper.inert = false;
+      saved.wrapper.style.position = '';
+      saved.wrapper.style.top = '';
+      saved.wrapper.style.left = '';
+      saved.wrapper.style.width = '';
       saved.wrapper.style.zIndex = '';
       document.title = saved.title;
       if (push) history.pushState({ url: saved.url }, '', saved.url);
