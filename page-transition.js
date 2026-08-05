@@ -611,7 +611,7 @@ FR.register({
    ============================================================ */
 (function () {
   var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
-  var BACK_NAV_MS = 10;   // nav on the way back: near-instant
+  var BACK_NAV_MS = 100;   // nav on the way back: near-instant
   var EASE = 'cubic-bezier(.39,.575,.565,1)';
 
   var SEL = {
@@ -838,6 +838,13 @@ FR.register({
       anims.forEach(function (a) { try { a.cancel(); } catch (e) {} });
       current.remove();
 
+      // Un-fixing the stashed page drops it back into normal flow at
+      // scrollTop 0. Lenis applies scrollTo on the next frame, so the browser
+      // paints one frame at the top first: that is the jump. Restore the
+      // scroll natively in the SAME synchronous block, before any paint, and
+      // only then hand control back to Lenis.
+      if (window.lenis) lenis.stop();
+
       saved.wrapper.removeAttribute('data-fr-stale');
       saved.wrapper.removeAttribute('aria-hidden');
       saved.wrapper.inert = false;
@@ -846,12 +853,18 @@ FR.register({
       saved.wrapper.style.left = '';
       saved.wrapper.style.width = '';
       saved.wrapper.style.zIndex = '';
+
+      window.scrollTo(0, saved.scrollY);   // synchronous, no intermediate paint
+
       document.title = saved.title;
       if (push) history.pushState({ url: saved.url }, '', saved.url);
       reinitWebflow(saved.wfPage);
 
-      if (window.lenis) { lenis.start(); lenis.scrollTo(saved.scrollY, { immediate: true }); }
-      else window.scrollTo(0, saved.scrollY);
+      if (window.lenis) {
+        if (lenis.resize) lenis.resize();                       // height changed
+        lenis.scrollTo(saved.scrollY, { immediate: true, force: true });
+        lenis.start();
+      }
 
       initAll();
       animating = false;
