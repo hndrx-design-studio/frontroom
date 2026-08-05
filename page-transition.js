@@ -1,20 +1,9 @@
-<!-- ============================================================
-     FRONT ROOM — TRANSITION ROUTER
-     Paste in: Site Settings > Custom Code > FOOTER Code
-     (replace everything currently there)
+/* ============================================================
+   FRONT ROOM - TRANSITION ROUTER
 
-     SETUP CHECKLIST — do these or it won't work
-       1. Move Archive's TWO <style> blocks into Site Settings > Head Code
-       2. Move the Finsweet <script> tag into Site Settings > Head Code
-       3. DELETE all page-level Footer Code on Archive, Work, Projects Template
-       4. Keep data-vt="hold" on nav links
-       5. Delete IX2 interactions as you replace them with GSAP
-
-     Modules are DOM-conditional: each init() looks for its own elements
-     and no-ops if absent. So every module runs on every page and there
-     is no page-to-module mapping to maintain.
-     ============================================================ -->
-
+   Load this file AFTER gsap, ScrollTrigger, Swiper and Lenis.
+   See the setup notes in chat for the exact Webflow footer order.
+   ============================================================ */
 
 /* ============================================================
    0. NAMESPACE + LENIS (persistent, never destroyed)
