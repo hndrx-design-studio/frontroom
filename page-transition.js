@@ -1,22 +1,5 @@
 window.FR = { modules: [], register: function (m) { this.modules.push(m); } };
 
-window.lenis = new Lenis({
-  duration: 2.2,
-  easing: function (t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); },
-  autoRaf: true
-});
-
-document.addEventListener('click', function (e) {
-  if (e.target.closest('[data-lenis-stop]'))  lenis.stop();
-  if (e.target.closest('[data-lenis-start]')) lenis.start();
-  var toggle = e.target.closest('[data-lenis-toggle]');
-  if (toggle) {
-    toggle.classList.toggle('stop-scroll');
-    toggle.classList.contains('stop-scroll') ? lenis.stop() : lenis.start();
-  }
-});
-
-
 /* ============================================================
    1. MODAL  (merged: Archive's lenis control + Work's autoclose)
    ============================================================ */
@@ -26,28 +9,36 @@ FR.register((function () {
   function getModal(name) { return document.querySelector('[data-modal="' + name + '"]'); }
   function isOpen(m) { return m.classList.contains('is-open'); }
 
-  // A modal that CSS keeps hidden at this breakpoint (e.g. the About one,
-  // which is hover-driven on desktop) must not lock scrolling.
-  function rendered(m) {
-    return !!(m.offsetWidth || m.offsetHeight || m.getClientRects().length);
+  var MOBILE = '(max-width: 767px)';
+
+  // Whether opening this modal should lock page scroll.
+  //   data-modal-lock="mobile"  -> only below 768px (About: hover on
+  //                                desktop/tablet, real modal on mobile)
+  //   data-modal-lock="never"   -> never lock
+  //   attribute absent          -> always lock (Archive, Work)
+  function shouldLock(m) {
+    var mode = (m.getAttribute('data-modal-lock') || '').toLowerCase();
+    if (mode === 'never')  return false;
+    if (mode === 'mobile') return window.matchMedia(MOBILE).matches;
+    return true;
   }
 
-  function anyRenderedOpen() {
+  function anyLockingOpen() {
     var list = document.querySelectorAll('[data-modal].is-open');
     for (var i = 0; i < list.length; i++) {
-      if (rendered(list[i])) return true;
+      if (shouldLock(list[i])) return true;
     }
     return false;
   }
 
   function open(m) {
     m.classList.add('is-open');
-    if (window.lenis && rendered(m)) lenis.stop();
+    if (window.lenis && shouldLock(m)) lenis.stop();
   }
 
   function close(m) {
     m.classList.remove('is-open');
-    if (window.lenis && !anyRenderedOpen()) lenis.start();
+    if (window.lenis && !anyLockingOpen()) lenis.start();
   }
 
   return {
