@@ -85,7 +85,6 @@ FR.register((function () {
    2. ARCHIVE FILTER  (was duplicated twice ? now single)
    ============================================================ */
 FR.register((function () {
-  var SINGLE = 'fragments';
   var onClick;
 
   function norm(v) { return (v || '').trim().toLowerCase(); }
@@ -103,16 +102,14 @@ FR.register((function () {
         if (!modal) return;
 
         var work = norm(card.getAttribute('data-work'));
-        var keyAttr = work === SINGLE ? 'data-name' : 'data-work';
-        var key = norm(card.getAttribute(keyAttr));
-        if (!key) return;
+        if (!work) return;
 
         modal.querySelectorAll('[data-work-text]').forEach(function (el) {
           el.style.display = norm(el.getAttribute('data-work')) === work ? '' : 'none';
         });
 
         document.dispatchEvent(new CustomEvent('archivefiltered', {
-          detail: { key: key, keyAttr: keyAttr, modal: modal }
+          detail: { key: work, keyAttr: 'data-work', modal: modal }
         }));
       };
       document.addEventListener('click', onClick, true);
