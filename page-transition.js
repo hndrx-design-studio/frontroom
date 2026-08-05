@@ -639,6 +639,12 @@ FR.register({
     return true;
   }
 
+  // NB: document.querySelector('.page-wrapper') returns the FIRST wrapper in
+  // the DOM, which is the stashed one. Always resolve the active page instead.
+  function activeWrapper() {
+    return document.querySelector('.page-wrapper:not([data-fr-stale])');
+  }
+
   function closeOpen() {
     document.querySelectorAll('[data-modal].is-open, [data-hover-target].is-open')
       .forEach(function (el) { el.classList.remove('is-open'); });
@@ -703,7 +709,7 @@ FR.register({
     closeOpen();
 
     var overlay = document.querySelector(SEL.overlay);
-    var oldWrapper = document.querySelector(SEL.wrapper);
+    var oldWrapper = activeWrapper();
     if (oldWrapper) oldWrapper.style.zIndex = '40';
 
     fetch(url)
@@ -812,7 +818,7 @@ FR.register({
     closeOpen();
 
     var overlay = document.querySelector(SEL.overlay);
-    var current = document.querySelector(SEL.wrapper);
+    var current = activeWrapper();
     if (!current) { animating = false; location.href = saved.url; return; }
 
     // the stashed page is already in the DOM behind us
