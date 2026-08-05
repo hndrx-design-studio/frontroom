@@ -827,9 +827,6 @@ FR.register({
     current.style.zIndex = '60';
     current.style.width = '100%';
 
-    var main = current.querySelector(SEL.main);
-    var navs = [current.querySelector(SEL.navDesk),
-                current.querySelector(SEL.navMob)].filter(Boolean);
     var anims = [];
 
     function done() {
@@ -856,18 +853,12 @@ FR.register({
       animating = false;
     }
 
-    if (main) {
-      anims.push(main.animate(
-        [{ transform: 'translateY(0)' }, { transform: 'translateY(100vh)' }],
-        { duration: SLIDE_MS, easing: EASE, fill: 'forwards' }
-      ));
-    }
-    navs.forEach(function (n) {
-      anims.push(n.animate(
-        [{ transform: 'translateY(0)' }, { transform: 'translateY(-100%)' }],
-        { duration: NAV_MS, easing: EASE, fill: 'forwards' }
-      ));
-    });
+    // Slide the whole page away as one block, nav included. Animating the
+    // nav separately would tear the page apart and flash the nav underneath.
+    anims.push(current.animate(
+      [{ transform: 'translateY(0)' }, { transform: 'translateY(100vh)' }],
+      { duration: SLIDE_MS, easing: EASE, fill: 'forwards' }
+    ));
     if (overlay) {
       overlay.style.visibility = 'visible';
       overlay.style.pointerEvents = 'none';
