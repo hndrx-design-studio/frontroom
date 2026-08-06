@@ -417,7 +417,16 @@ FR.register((function () {
       freeMode: true,
       grabCursor: true,
       autoplay: { delay: DELAY, disableOnInteraction: false, pauseOnMouseEnter: true },
-      navigation: { prevEl: entry.nav.prev, nextEl: entry.nav.next }
+      navigation: { prevEl: entry.nav.prev, nextEl: entry.nav.next },
+      // wheel / trackpad scrolls the slider itself when it is vertical.
+      // forceToAxis ignores sideways trackpad drift; releaseOnEdges is off
+      // because the slider loops, so it never reaches an edge to release at.
+      mousewheel: vert ? {
+        enabled: true,
+        forceToAxis: true,
+        releaseOnEdges: false,
+        sensitivity: 1
+      } : false
     });
   }
 
@@ -611,7 +620,8 @@ FR.register({
    ============================================================ */
 (function () {
   var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
-  var BACK_NAV_MS = 10;   // nav on the way back: near-instant
+  var BACK_NAV_MS = 0.1;    // nav on the way back: instant, never seen moving
+  var BACK_NAV_DELAY = 400; // held until the page has already dropped away
   var EASE = 'cubic-bezier(.39,.575,.565,1)';
 
   var SEL = {
@@ -880,7 +890,7 @@ FR.register({
     navs.forEach(function (n) {
       anims.push(n.animate(
         [{ transform: 'translateY(0)' }, { transform: 'translateY(-100%)' }],
-        { duration: BACK_NAV_MS, easing: 'linear', fill: 'forwards' }
+        { duration: BACK_NAV_MS, delay: BACK_NAV_DELAY, easing: 'linear', fill: 'forwards' }
       ));
     });
     if (overlay) {
@@ -917,8 +927,13 @@ FR.register({
       } catch (err) {}
     }
 
-    var hold = a.getAttribute('data-vt') === 'hold' ||
-               !!(a.closest(SEL.navDesk) || a.closest(SEL.navMob));
+    // data-vt="hold" -> never animate the incoming nav
+    // data-vt="move" -> always animate it, even from inside the nav
+    // absent         -> hold if the click came from the nav, else move
+    var vt = (a.getAttribute('data-vt') || '').toLowerCase();
+    var hold = vt === 'move' ? false
+             : vt === 'hold' ? true
+             : !!(a.closest(SEL.navDesk) || a.closest(SEL.navMob));
     var asPage = a.hasAttribute('data-page-modal') || !!a.closest('[data-page-modal]');
     go(a.href, hold, true, asPage);
   });
