@@ -622,6 +622,7 @@ FR.register({
   var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
   var BACK_NAV_MS = 0.1;    // nav on the way back: instant, never seen moving
   var BACK_NAV_DELAY = 400; // held until the page has already dropped away
+  var SMOOTH_NAV_MS = 400;  // nav exit when a footer link triggered the return
   var EASE = 'cubic-bezier(.39,.575,.565,1)';
 
   var SEL = {
@@ -819,7 +820,9 @@ FR.register({
   }
 
   // ---------- return to the stashed page ----------
-  function restore(push) {
+  // smoothNav: true when a link click triggered this, so the nav glides out
+  // instead of blinking away as it does for back / data-page-back.
+  function restore(push, smoothNav) {
     if (animating || !stash) return;
     animating = true;
 
@@ -890,7 +893,9 @@ FR.register({
     navs.forEach(function (n) {
       anims.push(n.animate(
         [{ transform: 'translateY(0)' }, { transform: 'translateY(-100%)' }],
-        { duration: BACK_NAV_MS, delay: BACK_NAV_DELAY, easing: 'linear', fill: 'forwards' }
+        smoothNav
+          ? { duration: SMOOTH_NAV_MS, easing: EASE, fill: 'forwards' }
+          : { duration: BACK_NAV_MS, delay: BACK_NAV_DELAY, easing: 'linear', fill: 'forwards' }
       ));
     });
     if (overlay) {
@@ -923,17 +928,14 @@ FR.register({
     // returning to the stashed page by clicking a link to it
     if (stash) {
       try {
-        if (new URL(a.href, location.href).href === stash.url) { restore(true); return; }
+        if (new URL(a.href, location.href).href === stash.url) { restore(true, true); return; }
       } catch (err) {}
     }
 
-    // data-vt="hold" -> never animate the incoming nav
-    // data-vt="move" -> always animate it, even from inside the nav
-    // absent         -> hold if the click came from the nav, else move
+    // The incoming nav animates ONLY for links tagged data-vt="move"
+    // (the footer links). Every other link leaves the nav alone.
     var vt = (a.getAttribute('data-vt') || '').toLowerCase();
-    var hold = vt === 'move' ? false
-             : vt === 'hold' ? true
-             : !!(a.closest(SEL.navDesk) || a.closest(SEL.navMob));
+    var hold = vt !== 'move';
     var asPage = a.hasAttribute('data-page-modal') || !!a.closest('[data-page-modal]');
     go(a.href, hold, true, asPage);
   });
