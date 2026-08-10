@@ -99,11 +99,14 @@ FR.register((function () {
    ============================================================ */
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
-  var CLOSE_DELAY = 400;   // grace period so moving between items doesn't blink
-  var mq, onMQ, onClick, onKey, bound = [], closeTimer = null;
+  var CLOSE_DELAY = 400;   // grace period after leaving the list entirely
+  var OVERLAP_MS  = 300;   // how long the outgoing image stays up while the
+                           // incoming one fades in, so they genuinely overlap
+  var mq, onMQ, onClick, onKey, bound = [], closeTimer = null, overlapTimer = null;
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
   function scheduleClose() { cancelClose(); closeTimer = setTimeout(closeAll, CLOSE_DELAY); }
+  function cancelOverlap() { if (overlapTimer) { clearTimeout(overlapTimer); overlapTimer = null; } }
 
   function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
@@ -127,11 +130,13 @@ FR.register((function () {
       var enter = function () {
         if (!isDesktop()) return;
         cancelClose();
-        var name = opener.getAttribute('data-hover-open');
-        var next = targetFor(name);
-        console.log('[hoverSwap] hover', name, '-> target found:', !!next);
-        show(next, false);
-        closeAll(next);
+        cancelOverlap();
+        var next = targetFor(opener.getAttribute('data-hover-open'));
+        show(next, false);                     // new one starts fading in
+        overlapTimer = setTimeout(function () { // old one lingers, then goes
+          closeAll(next);
+          overlapTimer = null;
+        }, OVERLAP_MS);
       };
       var leave = function () { if (isDesktop()) scheduleClose(); };
       opener.addEventListener('mouseenter', enter);
@@ -151,13 +156,7 @@ FR.register((function () {
   return {
     name: 'hoverSwap',
     init: function () {
-      var openers = FR.root().querySelectorAll('[data-hover-open]');
-      var targets = FR.root().querySelectorAll('[data-hover-target]');
-      console.log('[hoverSwap] openers:', openers.length, 'targets:', targets.length,
-                  'desktop:', window.matchMedia(DESKTOP).matches);
-      if (targets[0]) console.log('[hoverSwap] first target class:', targets[0].className,
-                  'has data-modal:', targets[0].hasAttribute('data-modal'));
-      if (!openers.length) { console.warn('[hoverSwap] no [data-hover-open] found, module idle'); return; }
+      if (!FR.root().querySelector('[data-hover-open]')) return;
       mq = window.matchMedia(DESKTOP);
 
       if (isDesktop()) bindHover();
@@ -185,6 +184,7 @@ FR.register((function () {
     },
     destroy: function () {
       cancelClose();
+      cancelOverlap();
       closeAll();
       unbindHover();
       if (mq && onMQ) mq.removeEventListener('change', onMQ);
