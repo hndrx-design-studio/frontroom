@@ -99,51 +99,37 @@ FR.register((function () {
    ============================================================ */
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
-  var CLOSE_DELAY = 400;
-  var FADE_MS = 400;
-  var mq, onMQ, onClick, onKey, bound = [], closeTimer = null;
-  var targets = [], layered = false;
+  var CLOSE_DELAY = 400;   // after leaving the list entirely
+  var SWAP_DELAY  = 200;   // overlap when moving from one item to the next:
+                           // the new image comes up first, the old one holds
+                           // for this long, then fades out
+  var mq, onMQ, onClick, onKey, bound = [], closeTimer = null, swapTimer = null;
+  var targets = [];
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
+  function cancelSwap()  { if (swapTimer)  { clearTimeout(swapTimer);  swapTimer  = null; } }
   function scheduleClose() { cancelClose(); closeTimer = setTimeout(hideAll, CLOSE_DELAY); }
 
   function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
 
-  // Desktop: stack the targets on top of each other and drive opacity inline.
-  // Webflow sizes each one at 100vh in normal flow, so without this they sit
-  // a viewport apart and only the first is ever on screen.
-  function layer() {
-    if (layered) return;
-    targets.forEach(function (el) {
-      el.style.position = 'absolute';
-      el.style.inset = '0';
-      el.style.display = 'flex';
-      el.style.opacity = '0';
-      el.style.transition = 'opacity ' + FADE_MS + 'ms ease-out';
-      el.classList.remove('is-open');
-    });
-    layered = true;
-  }
-
-  // Mobile: hand control back to the stylesheet + is-open.
-  function unlayer() {
-    if (!layered) return;
-    targets.forEach(function (el) {
-      el.style.position = '';
-      el.style.inset = '';
-      el.style.display = '';
-      el.style.opacity = '';
-      el.style.transition = '';
-    });
-    layered = false;
-  }
-
+  // Desktop / tablet: opacity only. Positioning, display and the transition
+  // all stay in Webflow. The script never touches them.
   function showDesktop(el) {
-    targets.forEach(function (t) { t.style.opacity = t === el ? '1' : '0'; });
+    if (el) el.style.opacity = '1';          // new one up straight away
+    cancelSwap();
+    swapTimer = setTimeout(function () {      // old ones linger, then fade
+      targets.forEach(function (t) { if (t !== el) t.style.opacity = '0'; });
+      swapTimer = null;
+    }, SWAP_DELAY);
+  }
+
+  function clearOpacity() {
+    targets.forEach(function (t) { t.style.opacity = ''; });
   }
 
   function hideAll() {
+    cancelSwap();
     if (isDesktop()) {
       targets.forEach(function (t) { t.style.opacity = '0'; });
       return;
@@ -183,14 +169,19 @@ FR.register((function () {
       targets = Array.prototype.slice.call(FR.root().querySelectorAll('[data-hover-target]'));
 
       function apply() {
-        if (isDesktop()) { layer(); bindHover(); }
-        else { unbindHover(); unlayer(); }
+        if (isDesktop()) {
+          targets.forEach(function (t) { t.classList.remove('is-open'); t.style.opacity = '0'; });
+          bindHover();
+        } else {
+          unbindHover();
+          clearOpacity();
+        }
       }
       apply();
-      onMQ = function () { hideAll(); apply(); };
+      onMQ = function () { apply(); };
       mq.addEventListener('change', onMQ);
 
-      // mobile: tap to toggle, uses is-open + your display CSS
+      // mobile: tap to toggle, driven by is-open and your display CSS
       onClick = function (e) {
         if (e.target.closest('[data-hover-close]')) { hideAll(); return; }
         if (isDesktop()) return;
@@ -208,9 +199,10 @@ FR.register((function () {
     },
     destroy: function () {
       cancelClose();
-      hideAll();
+      cancelSwap();
       unbindHover();
-      unlayer();
+      clearOpacity();
+      targets.forEach(function (t) { t.classList.remove('is-open'); });
       if (mq && onMQ) mq.removeEventListener('change', onMQ);
       if (onClick) document.removeEventListener('click', onClick);
       if (onKey)   document.removeEventListener('keydown', onKey);
