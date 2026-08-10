@@ -127,9 +127,11 @@ FR.register((function () {
       var enter = function () {
         if (!isDesktop()) return;
         cancelClose();
-        var next = targetFor(opener.getAttribute('data-hover-open'));
-        show(next, false);      // reveal the new one first
-        closeAll(next);         // then fade the others, so they overlap
+        var name = opener.getAttribute('data-hover-open');
+        var next = targetFor(name);
+        console.log('[hoverSwap] hover', name, '-> target found:', !!next);
+        show(next, false);
+        closeAll(next);
       };
       var leave = function () { if (isDesktop()) scheduleClose(); };
       opener.addEventListener('mouseenter', enter);
@@ -149,7 +151,13 @@ FR.register((function () {
   return {
     name: 'hoverSwap',
     init: function () {
-      if (!FR.root().querySelector('[data-hover-open]')) return;
+      var openers = FR.root().querySelectorAll('[data-hover-open]');
+      var targets = FR.root().querySelectorAll('[data-hover-target]');
+      console.log('[hoverSwap] openers:', openers.length, 'targets:', targets.length,
+                  'desktop:', window.matchMedia(DESKTOP).matches);
+      if (targets[0]) console.log('[hoverSwap] first target class:', targets[0].className,
+                  'has data-modal:', targets[0].hasAttribute('data-modal'));
+      if (!openers.length) { console.warn('[hoverSwap] no [data-hover-open] found, module idle'); return; }
       mq = window.matchMedia(DESKTOP);
 
       if (isDesktop()) bindHover();
