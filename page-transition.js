@@ -100,14 +100,10 @@ FR.register((function () {
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
   var CLOSE_DELAY = 400;   // grace period after leaving the list entirely
-  var OVERLAP_MS  = 0;     // 0 because the CSS is opacity-only: both targets
-                           // stay in the DOM, so their fades already overlap.
-                           // Raise it only if you reintroduce display toggling.
-  var mq, onMQ, onClick, onKey, bound = [], closeTimer = null, overlapTimer = null;
+  var mq, onMQ, onClick, onKey, bound = [], closeTimer = null;
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
   function scheduleClose() { cancelClose(); closeTimer = setTimeout(closeAll, CLOSE_DELAY); }
-  function cancelOverlap() { if (overlapTimer) { clearTimeout(overlapTimer); overlapTimer = null; } }
 
   function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
@@ -131,13 +127,8 @@ FR.register((function () {
       var enter = function () {
         if (!isDesktop()) return;
         cancelClose();
-        cancelOverlap();
-        var next = targetFor(opener.getAttribute('data-hover-open'));
-        show(next, false);                     // new one starts fading in
-        overlapTimer = setTimeout(function () { // old one lingers, then goes
-          closeAll(next);
-          overlapTimer = null;
-        }, OVERLAP_MS);
+        closeAll();
+        show(targetFor(opener.getAttribute('data-hover-open')), false);
       };
       var leave = function () { if (isDesktop()) scheduleClose(); };
       opener.addEventListener('mouseenter', enter);
@@ -185,7 +176,6 @@ FR.register((function () {
     },
     destroy: function () {
       cancelClose();
-      cancelOverlap();
       closeAll();
       unbindHover();
       if (mq && onMQ) mq.removeEventListener('change', onMQ);
