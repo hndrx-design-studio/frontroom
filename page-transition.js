@@ -100,11 +100,11 @@ FR.register((function () {
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
   var CLOSE_DELAY = 400;   // after leaving the list entirely
-  var SWAP_DELAY  = 200;   // overlap when moving from one item to the next:
-                           // the new image comes up first, the old one holds
-                           // for this long, then fades out
+  var SWAP_DELAY  = 200;   // moving between items: new image comes up first,
+                           // old one holds this long, then fades out
+  var FADE_MS = 400;       // inline opacity transition
   var mq, onMQ, onClick, onKey, bound = [], closeTimer = null, swapTimer = null;
-  var targets = [];
+  var targets = [], layered = false;
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
   function cancelSwap()  { if (swapTimer)  { clearTimeout(swapTimer);  swapTimer  = null; } }
@@ -113,19 +113,42 @@ FR.register((function () {
   function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
 
-  // Desktop / tablet: opacity only. Positioning, display and the transition
-  // all stay in Webflow. The script never touches them.
+  // Desktop: stack the targets on top of each other and drive opacity inline.
+  // Webflow sizes each one at 100vh in normal flow, so without this they sit
+  // a viewport apart and only the first is ever on screen.
+  function layer() {
+    if (layered) return;
+    targets.forEach(function (el) {
+      el.style.position = 'absolute';
+      el.style.inset = '0';
+      el.style.display = 'flex';
+      el.style.opacity = '0';
+      el.style.transition = 'opacity ' + FADE_MS + 'ms ease-out';
+      el.classList.remove('is-open');
+    });
+    layered = true;
+  }
+
+  // Mobile: hand control back to the stylesheet + is-open.
+  function unlayer() {
+    if (!layered) return;
+    targets.forEach(function (el) {
+      el.style.position = '';
+      el.style.inset = '';
+      el.style.display = '';
+      el.style.opacity = '';
+      el.style.transition = '';
+    });
+    layered = false;
+  }
+
   function showDesktop(el) {
-    if (el) el.style.opacity = '1';          // new one up straight away
+    if (el) el.style.opacity = '1';       // new one up immediately
     cancelSwap();
-    swapTimer = setTimeout(function () {      // old ones linger, then fade
+    swapTimer = setTimeout(function () {   // old ones linger, then fade
       targets.forEach(function (t) { if (t !== el) t.style.opacity = '0'; });
       swapTimer = null;
     }, SWAP_DELAY);
-  }
-
-  function clearOpacity() {
-    targets.forEach(function (t) { t.style.opacity = ''; });
   }
 
   function hideAll() {
@@ -169,19 +192,14 @@ FR.register((function () {
       targets = Array.prototype.slice.call(FR.root().querySelectorAll('[data-hover-target]'));
 
       function apply() {
-        if (isDesktop()) {
-          targets.forEach(function (t) { t.classList.remove('is-open'); t.style.opacity = '0'; });
-          bindHover();
-        } else {
-          unbindHover();
-          clearOpacity();
-        }
+        if (isDesktop()) { layer(); bindHover(); }
+        else { unbindHover(); unlayer(); }
       }
       apply();
-      onMQ = function () { apply(); };
+      onMQ = function () { hideAll(); apply(); };
       mq.addEventListener('change', onMQ);
 
-      // mobile: tap to toggle, driven by is-open and your display CSS
+      // mobile: tap to toggle, uses is-open + your display CSS
       onClick = function (e) {
         if (e.target.closest('[data-hover-close]')) { hideAll(); return; }
         if (isDesktop()) return;
@@ -200,9 +218,9 @@ FR.register((function () {
     destroy: function () {
       cancelClose();
       cancelSwap();
+      hideAll();
       unbindHover();
-      clearOpacity();
-      targets.forEach(function (t) { t.classList.remove('is-open'); });
+      unlayer();
       if (mq && onMQ) mq.removeEventListener('change', onMQ);
       if (onClick) document.removeEventListener('click', onClick);
       if (onKey)   document.removeEventListener('keydown', onKey);
