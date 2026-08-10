@@ -100,7 +100,7 @@ FR.register((function () {
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
   var CLOSE_DELAY = 400;   // after leaving the list entirely
-  var SWAP_DELAY  = 200;   // moving between items: new image comes up first,
+  var SWAP_DELAY  = 100;   // moving between items: new image comes up first,
                            // old one holds this long, then fades out
   var FADE_MS = 400;       // inline opacity transition
   var mq, onMQ, onClick, onKey, bound = [], closeTimer = null, swapTimer = null;
