@@ -668,11 +668,11 @@ FR.register({
    Browser back also restores the stash when the URL matches.
    ============================================================ */
 (function () {
-  var SLIDE_MS = 950, NAV_DELAY = 450, NAV_MS = 450, OVERLAY_MS = 400;
+  var SLIDE_MS = 900, NAV_DELAY = 450, NAV_MS = 450, OVERLAY_MS = 400;
   var BACK_NAV_MS = 0.01;   // nav on the way back: instant, never seen moving
   var BACK_NAV_DELAY = 400; // held until the page has already dropped away
   var SMOOTH_NAV_MS = 0.01; // nav exit when a footer link triggered the return
-  var EASE = 'cubic-bezier(.19,1,.22,1)';   // expo-out: long dramatic glide
+  var EASE = 'cubic-bezier(.85,0,.15,1)';   // snappy: slow in, fast through, firm stop
 
   var SEL = {
     wrapper: '.page-wrapper',
