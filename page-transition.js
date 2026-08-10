@@ -99,26 +99,57 @@ FR.register((function () {
    ============================================================ */
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
-  var CLOSE_DELAY = 400;   // grace period after leaving the list entirely
+  var CLOSE_DELAY = 400;
+  var FADE_MS = 400;
   var mq, onMQ, onClick, onKey, bound = [], closeTimer = null;
+  var targets = [], layered = false;
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
-  function scheduleClose() { cancelClose(); closeTimer = setTimeout(closeAll, CLOSE_DELAY); }
+  function scheduleClose() { cancelClose(); closeTimer = setTimeout(hideAll, CLOSE_DELAY); }
 
   function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
 
-  function closeAll(except) {
-    FR.root().querySelectorAll('[data-hover-target].is-open').forEach(function (el) {
-      if (el !== except) el.classList.remove('is-open');
+  // Desktop: stack the targets on top of each other and drive opacity inline.
+  // Webflow sizes each one at 100vh in normal flow, so without this they sit
+  // a viewport apart and only the first is ever on screen.
+  function layer() {
+    if (layered) return;
+    targets.forEach(function (el) {
+      el.style.position = 'absolute';
+      el.style.inset = '0';
+      el.style.display = 'flex';
+      el.style.opacity = '0';
+      el.style.transition = 'opacity ' + FADE_MS + 'ms ease-out';
+      el.classList.remove('is-open');
     });
-    if (window.lenis && !isDesktop()) lenis.start();
+    layered = true;
   }
 
-  function show(el, lock) {
-    if (!el) return;
-    el.classList.add('is-open');
-    if (lock && window.lenis) lenis.stop();
+  // Mobile: hand control back to the stylesheet + is-open.
+  function unlayer() {
+    if (!layered) return;
+    targets.forEach(function (el) {
+      el.style.position = '';
+      el.style.inset = '';
+      el.style.display = '';
+      el.style.opacity = '';
+      el.style.transition = '';
+    });
+    layered = false;
+  }
+
+  function showDesktop(el) {
+    targets.forEach(function (t) { t.style.opacity = t === el ? '1' : '0'; });
+  }
+
+  function hideAll() {
+    if (isDesktop()) {
+      targets.forEach(function (t) { t.style.opacity = '0'; });
+      return;
+    }
+    targets.forEach(function (t) { t.classList.remove('is-open'); });
+    if (window.lenis) lenis.start();
   }
 
   function bindHover() {
@@ -127,8 +158,7 @@ FR.register((function () {
       var enter = function () {
         if (!isDesktop()) return;
         cancelClose();
-        closeAll();
-        show(targetFor(opener.getAttribute('data-hover-open')), false);
+        showDesktop(targetFor(opener.getAttribute('data-hover-open')));
       };
       var leave = function () { if (isDesktop()) scheduleClose(); };
       opener.addEventListener('mouseenter', enter);
@@ -150,38 +180,42 @@ FR.register((function () {
     init: function () {
       if (!FR.root().querySelector('[data-hover-open]')) return;
       mq = window.matchMedia(DESKTOP);
+      targets = Array.prototype.slice.call(FR.root().querySelectorAll('[data-hover-target]'));
 
-      if (isDesktop()) bindHover();
-      onMQ = function (e) {
-        closeAll();
-        e.matches ? bindHover() : unbindHover();
-      };
+      function apply() {
+        if (isDesktop()) { layer(); bindHover(); }
+        else { unbindHover(); unlayer(); }
+      }
+      apply();
+      onMQ = function () { hideAll(); apply(); };
       mq.addEventListener('change', onMQ);
 
-      // mobile: tap to toggle
+      // mobile: tap to toggle, uses is-open + your display CSS
       onClick = function (e) {
-        if (e.target.closest('[data-hover-close]')) { closeAll(); return; }
+        if (e.target.closest('[data-hover-close]')) { hideAll(); return; }
         if (isDesktop()) return;
         var opener = e.target.closest('[data-hover-open]');
         if (!opener) return;
         var el = targetFor(opener.getAttribute('data-hover-open'));
-        if (el && el.classList.contains('is-open')) { closeAll(); return; }
-        closeAll();
-        show(el, true);
+        if (el && el.classList.contains('is-open')) { hideAll(); return; }
+        hideAll();
+        if (el) { el.classList.add('is-open'); if (window.lenis) lenis.stop(); }
       };
       document.addEventListener('click', onClick);
 
-      onKey = function (e) { if (e.key === 'Escape') closeAll(); };
+      onKey = function (e) { if (e.key === 'Escape') hideAll(); };
       document.addEventListener('keydown', onKey);
     },
     destroy: function () {
       cancelClose();
-      closeAll();
+      hideAll();
       unbindHover();
+      unlayer();
       if (mq && onMQ) mq.removeEventListener('change', onMQ);
       if (onClick) document.removeEventListener('click', onClick);
       if (onKey)   document.removeEventListener('keydown', onKey);
       mq = null; onMQ = onClick = onKey = null;
+      targets = [];
     }
   };
 })());
