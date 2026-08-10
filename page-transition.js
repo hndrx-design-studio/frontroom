@@ -99,7 +99,11 @@ FR.register((function () {
    ============================================================ */
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
-  var mq, onMQ, onClick, onKey, bound = [];
+  var CLOSE_DELAY = 200;   // grace period so moving between items doesn't blink
+  var mq, onMQ, onClick, onKey, bound = [], closeTimer = null;
+
+  function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
+  function scheduleClose() { cancelClose(); closeTimer = setTimeout(closeAll, CLOSE_DELAY); }
 
   function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
@@ -123,10 +127,11 @@ FR.register((function () {
     FR.root().querySelectorAll('[data-hover-open]').forEach(function (opener) {
       var enter = function () {
         if (!isDesktop()) return;
+        cancelClose();
         closeAll();
         show(targetFor(opener.getAttribute('data-hover-open')), false);
       };
-      var leave = function () { if (isDesktop()) closeAll(); };
+      var leave = function () { if (isDesktop()) scheduleClose(); };
       opener.addEventListener('mouseenter', enter);
       opener.addEventListener('mouseleave', leave);
       bound.push({ el: opener, enter: enter, leave: leave });
@@ -171,6 +176,7 @@ FR.register((function () {
       document.addEventListener('keydown', onKey);
     },
     destroy: function () {
+      cancelClose();
       closeAll();
       unbindHover();
       if (mq && onMQ) mq.removeEventListener('change', onMQ);
@@ -619,11 +625,11 @@ FR.register({
    Browser back also restores the stash when the URL matches.
    ============================================================ */
 (function () {
-  var SLIDE_MS = 800, NAV_DELAY = 400, NAV_MS = 400, OVERLAY_MS = 400;
-  var BACK_NAV_MS = 0.1;    // nav on the way back: instant, never seen moving
+  var SLIDE_MS = 950, NAV_DELAY = 450, NAV_MS = 450, OVERLAY_MS = 400;
+  var BACK_NAV_MS = 0.01;   // nav on the way back: instant, never seen moving
   var BACK_NAV_DELAY = 400; // held until the page has already dropped away
-  var SMOOTH_NAV_MS = 400;  // nav exit when a footer link triggered the return
-  var EASE = 'cubic-bezier(.39,.575,.565,1)';
+  var SMOOTH_NAV_MS = 0.01; // nav exit when a footer link triggered the return
+  var EASE = 'cubic-bezier(.19,1,.22,1)';   // expo-out: long dramatic glide
 
   var SEL = {
     wrapper: '.page-wrapper',
