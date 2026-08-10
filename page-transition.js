@@ -99,7 +99,7 @@ FR.register((function () {
    ============================================================ */
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
-  var CLOSE_DELAY = 600;   // grace period so moving between items doesn't blink
+  var CLOSE_DELAY = 400;   // grace period so moving between items doesn't blink
   var mq, onMQ, onClick, onKey, bound = [], closeTimer = null;
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
@@ -108,11 +108,10 @@ FR.register((function () {
   function targetFor(name) { return FR.root().querySelector('[data-hover-target="' + name + '"]'); }
   function isDesktop() { return mq ? mq.matches : window.matchMedia(DESKTOP).matches; }
 
-  function closeAll() {
+  function closeAll(except) {
     FR.root().querySelectorAll('[data-hover-target].is-open').forEach(function (el) {
-      el.classList.remove('is-open');
+      if (el !== except) el.classList.remove('is-open');
     });
-    // scroll only ever locked on mobile, so release it here
     if (window.lenis && !isDesktop()) lenis.start();
   }
 
@@ -128,8 +127,9 @@ FR.register((function () {
       var enter = function () {
         if (!isDesktop()) return;
         cancelClose();
-        closeAll();
-        show(targetFor(opener.getAttribute('data-hover-open')), false);
+        var next = targetFor(opener.getAttribute('data-hover-open'));
+        show(next, false);      // reveal the new one first
+        closeAll(next);         // then fade the others, so they overlap
       };
       var leave = function () { if (isDesktop()) scheduleClose(); };
       opener.addEventListener('mouseenter', enter);
