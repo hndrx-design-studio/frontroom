@@ -99,7 +99,7 @@ FR.register((function () {
    ============================================================ */
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
-  var CLOSE_DELAY = 200;   // grace period so moving between items doesn't blink
+  var CLOSE_DELAY = 600;   // grace period so moving between items doesn't blink
   var mq, onMQ, onClick, onKey, bound = [], closeTimer = null;
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
