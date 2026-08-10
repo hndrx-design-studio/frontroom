@@ -100,8 +100,9 @@ FR.register((function () {
 FR.register((function () {
   var DESKTOP = '(min-width: 768px)';
   var CLOSE_DELAY = 400;   // grace period after leaving the list entirely
-  var OVERLAP_MS  = 300;   // how long the outgoing image stays up while the
-                           // incoming one fades in, so they genuinely overlap
+  var OVERLAP_MS  = 0;     // 0 because the CSS is opacity-only: both targets
+                           // stay in the DOM, so their fades already overlap.
+                           // Raise it only if you reintroduce display toggling.
   var mq, onMQ, onClick, onKey, bound = [], closeTimer = null, overlapTimer = null;
 
   function cancelClose() { if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; } }
