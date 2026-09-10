@@ -231,44 +231,6 @@ FR.register((function () {
 })());
 
 /* ============================================================
-   1c. NAV SCROLL RELEASE
-   The mobile menu locks scroll through [data-lenis-toggle], which only
-   unlocks when that same control is clicked a second time. Closing the
-   menu any other way, such as tapping a link inside it or a dead
-   href="#" link, left the stop-scroll class on and Lenis stopped, so the
-   page stayed frozen. This releases the lock on any click on a nav link.
-   ============================================================ */
-FR.register((function () {
-  var onClick;
-
-  function release() {
-    document.querySelectorAll('.stop-scroll').forEach(function (el) {
-      el.classList.remove('stop-scroll');
-    });
-    if (window.lenis) lenis.start();
-  }
-
-  return {
-    name: 'navScrollRelease',
-    init: function () {
-      onClick = function (e) {
-        var a = e.target.closest('a');
-        if (!a) return;
-        if (!a.closest('.navbar_component') && !a.closest('.mobile_rm-wrap')) return;
-        // let the menu's own close interaction run first, then unlock
-        setTimeout(release, 0);
-      };
-      document.addEventListener('click', onClick);
-    },
-    destroy: function () {
-      if (onClick) document.removeEventListener('click', onClick);
-      onClick = null;
-      release();          // never hand the next page a frozen scroll
-    }
-  };
-})());
-
-/* ============================================================
    2. ARCHIVE FILTER  (was duplicated twice ? now single)
    ============================================================ */
 FR.register((function () {
