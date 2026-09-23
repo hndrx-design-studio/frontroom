@@ -231,6 +231,32 @@ FR.register((function () {
 })());
 
 /* ============================================================
+   1d. TEAM SNIPPET   (About page)
+   Moves .team_snippet into .team_list, before the 3rd .team_item.
+   Runs on every navigation, not just a cold load.
+   ============================================================ */
+FR.register((function () {
+  var BEFORE_INDEX = 2;          // zero-based, so before the 3rd item
+
+  return {
+    name: 'teamSnippet',
+    init: function () {
+      var root = FR.root();
+      var list = root.querySelector('.team_list');
+      var snippet = root.querySelector('.team_snippet');
+      if (!list || !snippet) return;
+
+      var items = list.querySelectorAll(':scope > .team_item');
+      var anchor = items[BEFORE_INDEX];
+      if (anchor) list.insertBefore(snippet, anchor);
+      else list.appendChild(snippet);
+    },
+    // DOM-only: the moved node is discarded with the old wrapper
+    destroy: function () {}
+  };
+})());
+
+/* ============================================================
    2. ARCHIVE FILTER  (was duplicated twice ? now single)
    ============================================================ */
 FR.register((function () {
