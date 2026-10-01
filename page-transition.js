@@ -672,12 +672,10 @@ FR.register({
   name: 'finsweet',
   init: function () {
     if (!FR.root().querySelector('[fs-list-element], [fs-list-field], [fs-list-instance]')) return;
-    try {
-      window.FinsweetAttributes = window.FinsweetAttributes || [];
-      window.FinsweetAttributes.push(['list', function (instances) {
-        (instances || []).forEach(function (i) { if (i && i.restart) i.restart(); });
-      }]);
-    } catch (e) {}
+    window.FinsweetAttributes = window.FinsweetAttributes || [];
+    window.FinsweetAttributes.push(['list', function () {
+      window.FinsweetAttributes.modules.list.restart();
+    }]);
   },
   destroy: function () {}
 });
